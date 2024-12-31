@@ -152,7 +152,7 @@ class CoordinateAnalyzer:
                    'x': x, 'y': y, 'z': z,  
                    'timestamp': timestamp  
                 })  
-           except:  
+           except struct.error:  
               continue  
       return results  
   
@@ -165,6 +165,52 @@ class CoordinateAnalyzer:
         abs(y) < 1e6,  
         abs(z) < 1e6  
       ])  
+   
+   
+
+   def decode_payload(self, payload, x, y, z):  
+       """  
+       Decode payload using coordinates as encryption key  
+       Args:  
+          payload (bytes): The encrypted payload  
+          x, y, z (float/int): Coordinate values  
+       Returns:  
+          dict: Decoded payload information  
+       """  
+       try:  
+          # Generate key from coordinates with bounds checking  
+          key = (int(abs(x)) + int(abs(y)) + int(abs(z))) & 0xFFFFFFFF  
+          decoded_payload = bytearray()  
+       
+          # Process each byte with rolling key  
+          for i, byte in enumerate(payload):  
+            rolling_key = (key + i) & 0xFF  # Keep within byte range  
+            decoded_byte = byte ^ rolling_key  
+            decoded_payload.append(decoded_byte)  
+       
+          # Calculate printable character ratio  
+          printable_count = sum(32 <= b <= 126 for b in decoded_payload)  
+          printable_ratio = printable_count / len(decoded_payload) if decoded_payload else 0  
+       
+          # Create result dictionary  
+          result = {  
+            'raw_bytes': bytes(decoded_payload),  
+            'hex_string': decoded_payload.hex(),  
+            'ascii_string': decoded_payload.decode('utf-8', errors='ignore'),  
+            'key_info': f"Key: {key} (derived from x={x:.2f}, y={y:.2f}, z={z:.2f})",  
+            'stats': {  
+               'length': len(decoded_payload),  
+               'printable_ratio': printable_ratio,  
+               'is_likely_text': printable_ratio > 0.60  
+            }  
+          }  
+       
+          return result  
+       
+       except Exception as e:  
+          print(f"Decoding error: {str(e)}")  
+          return None
+  
   
 class PacketAnalyzerGUI:  
    def __init__(self, root):  
@@ -177,6 +223,7 @@ class PacketAnalyzerGUI:
       self.original_packets = []  # Store original packets for filter reset  
       self.current_packet_index = 0  
       self.coordinate_analyzer = CoordinateAnalyzer()  
+      self.filter_var = tk.StringVar()  # Define filter_var  
   
       self.create_gui()  
       self.add_protocol_filters()  
@@ -280,6 +327,10 @@ class PacketAnalyzerGUI:
              command=lambda: self.apply_quick_filter("DNS")).pack(side='left', padx=2)  
       ttk.Button(filter_frame, text="Reset Filters",  
              command=self.reset_filters).pack(side='left', padx=2)  
+  
+      # Add filter entry field  
+      filter_entry = tk.Entry(filter_frame, textvariable=self.filter_var)  
+      filter_entry.pack(side='left', padx=2)  
   
    def add_export_options(self):  
       """Add export menu options"""  
@@ -417,16 +468,15 @@ class PacketAnalyzerGUI:
         else:  
            self.payload_text.insert(tk.END, "No encodings detected.\n")  
   
-        if self.coordinate_analyzer.csv_data is not None:  
-           coords = self.coordinate_analyzer.find_coordinates(payload, packet.time)  
-           if coords:  
-              self.payload_text.insert(tk.END, "\nPotential Coordinates Found:\n")  
-              for coord in coords:  
-                self.payload_text.insert(tk.END,  
-                   f"Format: {coord['format']}\n"  
-                   f"Offset: {coord['offset']}\n"  
-                   f"Coordinates: ({coord['x']}, {coord['y']}, {coord['z']})\n"  
-                )  
+        coords = self.coordinate_analyzer.find_coordinates(payload, packet.time)  
+        if coords:  
+           self.payload_text.insert(tk.END, "\nPotential Coordinates Found:\n")  
+           for coord in coords:  
+              self.payload_text.insert(tk.END,  
+                f"Format: {coord['format']}\n"  
+                f"Offset: {coord['offset']}\n"  
+                f"Coordinates: ({coord['x']}, {coord['y']}, {coord['z']})\n"  
+              )  
   
    def apply_filter(self):  
       filter_text = self.filter_var.get().strip()  
@@ -520,7 +570,7 @@ class PacketAnalyzerGUI:
            messagebox.showerror("Error", f"Failed to export data: {str(e)}")  
   
    def save_analysis(self):  
-      """Save detailed analysis to a text file"""  
+      """Save detailed analysis including coordinate information to a text file"""  
       if not self.packets:  
         messagebox.showwarning("Warning", "No packets to save")  
         return  
@@ -543,6 +593,9 @@ class PacketAnalyzerGUI:
               f.write(f"TCP Packets: {sum(1 for p in self.packets if scapy.TCP in p)}\n")  
               f.write(f"UDP Packets: {sum(1 for p in self.packets if scapy.UDP in p)}\n\n")  
   
+              total_coordinates = 0  
+              coordinate_patterns = {}  
+  
               # Write detailed packet analysis  
               for i, packet in enumerate(self.packets, 1):  
                 f.write(f"\nPacket {i}\n")  
@@ -550,29 +603,68 @@ class PacketAnalyzerGUI:
                 f.write(packet.show(dump=True))  
                 f.write("\n")  
   
-                if scapy.TCP in packet or scapy.UDP in packet:  
-                   if scapy.TCP in packet:  
-                      payload = bytes(packet[scapy.TCP].payload)  
-                   else:  
-                      payload = bytes(packet[scapy.UDP].payload)  
+                if scapy.TCP in packet:  
+                   payload = bytes(packet[scapy.TCP].payload)  
+                elif scapy.UDP in packet:  
+                   payload = bytes(packet[scapy.UDP].payload)  
+                else:  
+                   continue  
   
-                   if payload:  
-                      f.write("\nPayload Analysis:\n")  
-                      f.write(f"Raw Hex: {payload.hex()}\n")  
-                      f.write(f"ASCII: {''.join(chr(b) if 32 <= b <= 126 else '.' for b in payload)}\n")  
+                if payload:  
+                   f.write("\nPayload Analysis:\n")  
+                   f.write(f"Raw Hex: {payload.hex()}\n")  
+                   f.write(f"Length: {len(payload)} bytes\n")  
+                   f.write(f"ASCII: {''.join(chr(b) if 32 <= b <= 126 else '.' for b in payload)}\n\n")  
   
-                      encodings = self.detector.detect_encoding(payload)  
-                      if encodings:  
-                        f.write("\nDetected Encodings:\n")  
-                        for encoding, decoded, confidence in encodings:  
-                           f.write(f"- {encoding} (confidence: {confidence:.2f})\n")  
-                           if decoded:  
-                              f.write(f"  Decoded: {decoded}\n")  
+                   # Coordinate Analysis  
+                   coords = self.coordinate_analyzer.find_coordinates(payload, packet.time)  
+                   if coords:  
+                      total_coordinates += len(coords)  
+                      f.write("Coordinate Analysis:\n")  
+                      f.write("-" * 20 + "\n")  
+                    
+                      for coord in coords:  
+                        pattern_key = f"{coord['format']}_{coord['offset']}"  
+                        coordinate_patterns[pattern_key] = coordinate_patterns.get(pattern_key, 0) + 1  
+  
+                        f.write(f"Format: {coord['format']}\n")  
+                        f.write(f"Offset: {coord['offset']}\n")  
+                        f.write(f"Coordinates: ({coord['x']:.3f}, {coord['y']:.3f}, {coord['z']:.3f})\n")  
+                      
+                        # Decode payload using coordinates  
+                        decoded = self.coordinate_analyzer.decode_with_coordinates(  
+                           payload, coord['x'], coord['y'], coord['z']  
+                        )  
+                        if decoded:  
+                           f.write("\nDecoded Data:\n")  
+                           f.write(f"{decoded['key_info']}\n")  
+                           f.write(f"Decoded Hex: {decoded['decoded_hex']}\n")  
+                           f.write(f"Decoded ASCII: {decoded['decoded_ascii']}\n")  
+                        f.write("-" * 20 + "\n")  
+  
+                   # Encoding Analysis  
+                   encodings = self.detector.detect_encoding(payload)  
+                   if encodings:  
+                      f.write("\nDetected Encodings:\n")  
+                      for encoding, decoded, confidence in encodings:  
+                        f.write(f"- {encoding} (confidence: {confidence:.2f})\n")  
+                        if decoded:  
+                           f.write(f"  Decoded: {decoded}\n")  
+  
+              # Write coordinate summary  
+              f.write("\nCoordinate Analysis Summary:\n")  
+              f.write("=" * 50 + "\n")  
+              f.write(f"Total Coordinates Found: {total_coordinates}\n\n")  
+              f.write("Coordinate Pattern Distribution:\n")  
+              for pattern, count in coordinate_patterns.items():  
+                f.write(f"- {pattern}: {count} occurrences\n")  
   
            messagebox.showinfo("Success", "Analysis saved successfully")  
            self.status_var.set("Analysis saved to file")  
+  
         except Exception as e:  
            messagebox.showerror("Error", f"Failed to save analysis: {str(e)}")  
+           print(f"Save error: {e}")  
   
    def load_coordinate_csv(self):  
       filename = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])  
@@ -584,67 +676,54 @@ class PacketAnalyzerGUI:
            messagebox.showerror("Error", str(e))  
   
    def analyze_coordinates(self):  
-       if not hasattr(self, 'packets') or not self.packets:  
-          messagebox.showwarning("Warning", "No packets loaded")  
-          return  
-       
-       if self.coordinate_analyzer.csv_data is None:  
-          messagebox.showwarning("Warning", "Please load coordinate CSV file first")  
-          return  
+      if not hasattr(self, 'packets') or not self.packets:  
+        messagebox.showwarning("Warning", "No packets loaded")  
+        return  
   
-       results_window = tk.Toplevel(self.root)  
-       results_window.title("Coordinate Analysis Results")  
-       results_text = scrolledtext.ScrolledText(results_window)  
-       results_text.pack(fill='both', expand=True)  
+      if self.coordinate_analyzer.csv_data is None:  
+        messagebox.showwarning("Warning", "Please load coordinate CSV file first")  
+        return  
   
-       total_matches = 0  
+      results_window = tk.Toplevel(self.root)  
+      results_window.title("Coordinate Analysis Results")  
+      results_text = scrolledtext.ScrolledText(results_window)  
+      results_text.pack(fill='both', expand=True)  
   
-       try:  
-          csv_data = self.coordinate_analyzer.csv_data  
-          csv_data['ID'] = pd.to_numeric(csv_data['ID'], errors='coerce')  
+      try:  
+        csv_data = self.coordinate_analyzer.csv_data  
+        for packet in self.packets:  
+           if scapy.TCP in packet:  
+              payload = bytes(packet[scapy.TCP].payload)  
+           elif scapy.UDP in packet:  
+              payload = bytes(packet[scapy.UDP].payload)  
+           else:  
+              continue  
   
-          for packet in self.packets:  
-            if scapy.TCP in packet:  
-               payload = bytes(packet[scapy.TCP].payload)  
-            elif scapy.UDP in packet:  
-               payload = bytes(packet[scapy.UDP].payload)  
-            else:  
-               continue  
+           coords = self.coordinate_analyzer.find_coordinates(payload, packet.time)  
+           if coords:  
+              for coord in coords:  
+                # Match coordinates with CSV data  
+                matches = csv_data[  
+                   (abs(csv_data['x'] - coord['x']) < 0.001) &  
+                   (abs(csv_data['y'] - coord['y']) < 0.001) &  
+                   (abs(csv_data['z'] - coord['z']) < 0.001)  
+                ]  
   
-            coords = self.coordinate_analyzer.find_coordinates(payload, packet.time)  
-            if coords:  
-               for coord in coords:  
-                  csv_time = coord['timestamp']  
-                  matches = csv_data[  
-                    (abs(csv_data['ID'] - csv_time) < 0.1) &  
-                    (abs(csv_data['x'] - coord['x']) < 0.001) &  
-                    (abs(csv_data['y'] - coord['y']) < 0.001) &  
-                    (abs(csv_data['z'] - coord['z']) < 0.001)  
-                  ]  
+                if not matches.empty:  
+                   # Use coordinates to decode payload  
+                   decoded_payload = self.coordinate_analyzer.decode_payload(payload, coord['x'], coord['y'], coord['z'])  
+                   if decoded_payload:  
+                      results_text.insert('end',  
+                        f"\nDecoded Payload:\n"  
+                        f"Format: {coord['format']}\n"  
+                        f"Offset: {coord['offset']}\n"  
+                        f"Coordinates: ({coord['x']:.3f}, {coord['y']:.3f}, {coord['z']:.3f})\n"  
+                        f"Decoded: {decoded_payload}\n"  
+                        f"{'='*50}\n"  
+                      )  
   
-                  if not matches.empty:  
-                    total_matches += 1  
-                    packet_time = datetime.fromtimestamp(float(packet.time)).strftime('%H:%M:%S.%f')  
-                    results_text.insert('end',  
-                       f"\nMatch #{total_matches}:\n"  
-                       f"Packet Time: {packet_time}\n"  
-                       f"Format: {coord['format']}\n"  
-                       f"Offset: {coord['offset']}\n"  
-                       f"Coordinates: ({coord['x']:.3f}, {coord['y']:.3f}, {coord['z']:.3f})\n"  
-                       f"Matching CSV IDs: {', '.join(map(str, matches['ID'].tolist()))}\n"  
-                       f"{'='*50}\n"  
-                    )  
-  
-          if total_matches == 0:  
-            results_text.insert('end', "No matching coordinates found.\n")  
-          else:  
-            results_text.insert('1.0', f"Found {total_matches} matching coordinates.\n{'='*50}\n\n")  
-          
-          self.status_var.set(f"Coordinate analysis complete: {total_matches} matches found")  
-  
-       except Exception as e:  
-          messagebox.showerror("Error", f"Coordinate analysis failed: {str(e)}")
-  
+      except Exception as e:  
+        messagebox.showerror("Error", f"Coordinate analysis failed: {str(e)}")  
   
 def main():  
    root = tk.Tk()  
