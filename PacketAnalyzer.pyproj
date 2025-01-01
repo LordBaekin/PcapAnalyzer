@@ -35,11 +35,6 @@
     <Compile Include="gui\widgets\__init__.py" />
     <Compile Include="gui\__init__.py" />
     <Compile Include="main.py" />
-    <Compile Include="PcapAnalyzer.py" />
-    <Compile Include="tests\test_analyzer.py" />
-    <Compile Include="tests\test_decoder.py" />
-    <Compile Include="tests\test_scanner.py" />
-    <Compile Include="tests\__init__.py" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="core\" />
@@ -48,8 +43,6 @@
     <Folder Include="gui\assets\icons\" />
     <Folder Include="gui\assets\styles\" />
     <Folder Include="gui\widgets\" />
-    <Folder Include="logs\" />
-    <Folder Include="tests\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

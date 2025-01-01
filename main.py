@@ -1,5 +1,3 @@
-
-
 import tkinter as tk
 from tkinter import ttk, filedialog, scrolledtext, messagebox
 import scapy.all as scapy
@@ -20,7 +18,6 @@ from queue import Queue
 import time
 import socket
 from typing import Dict, List, Tuple, Any
-
 class LivePacketScanner:
     def __init__(self, packet_callback, interface=None):
         self.packet_callback = packet_callback
@@ -28,7 +25,6 @@ class LivePacketScanner:
         self.is_running = False
         self.capture_thread = None
         self.packet_queue = Queue()
-
     def start_capture(self):
         if self.is_running:
             return
@@ -37,18 +33,15 @@ class LivePacketScanner:
         self.capture_thread = threading.Thread(target=self._capture_packets)
         self.capture_thread.daemon = True
         self.capture_thread.start()
-
     def stop_capture(self):
         self.is_running = False
         if self.capture_thread:
             self.capture_thread.join()
-
     def _capture_packets(self):
         def packet_handler(packet):
             if self.is_running:
                 self.packet_queue.put(packet)
                 self.packet_callback(packet)
-
         try:
             scapy.sniff(
                 iface=self.interface,
@@ -58,7 +51,6 @@ class LivePacketScanner:
             )
         except Exception as e:
             print(f"Capture error: {e}")
-
     def get_available_interfaces(self):
         try:
             # Get the network interfaces with their descriptions
@@ -74,12 +66,10 @@ class LivePacketScanner:
                 for iface in scapy.get_if_list():
                     # On Unix-like systems, the interface name is usually descriptive enough
                     interfaces[iface] = iface
-
             return interfaces
         except Exception as e:
             print(f"Error getting interfaces: {e}")
             return {}
-
 class ProtocolDecoder:
     def __init__(self):
         # Register known application layer protocols
@@ -100,7 +90,6 @@ class ProtocolDecoder:
             6379: 'Redis',
             27017: 'MongoDB'
         }
-
     def decode_packet(self, packet):
         """Main packet decoding method"""
         decoded_info = {
@@ -114,14 +103,12 @@ class ProtocolDecoder:
             'raw_data': self.get_raw_data(packet)
         }
         return decoded_info
-
     def get_timestamp(self, packet):
         """Extract and format packet timestamp"""
         return {
             'epoch': packet.time,
             'formatted': datetime.fromtimestamp(float(packet.time)).strftime('%Y-%m-%d %H:%M:%S.%f')
         }
-
     def decode_layer2(self, packet):
         """Decode Layer 2 (Data Link Layer) information"""
         l2_info = {}
@@ -139,7 +126,6 @@ class ProtocolDecoder:
             l2_info['bssid'] = packet.addr3
             
         return l2_info
-
     def decode_layer3(self, packet):
         """Decode Layer 3 (Network Layer) information"""
         l3_info = {}
@@ -171,7 +157,6 @@ class ProtocolDecoder:
             l3_info['dst_mac'] = packet[scapy.ARP].hwdst
             
         return l3_info
-
     def decode_layer4(self, packet):
         """Decode Layer 4 (Transport Layer) information"""
         l4_info = {}
@@ -200,7 +185,6 @@ class ProtocolDecoder:
             l4_info['type_name'] = self.get_icmp_type_name(packet[scapy.ICMP].type)
             
         return l4_info
-
     def decode_layer7(self, packet):
         """Decode Layer 7 (Application Layer) protocols"""
         l7_info = {}
@@ -229,7 +213,6 @@ class ProtocolDecoder:
                 l7_info['port'] = port
                 
         return l7_info
-
     def decode_http(self, packet):
         """Decode HTTP protocol details"""
         http_info = {}
@@ -252,7 +235,6 @@ class ProtocolDecoder:
                 http_info['headers'] = self.decode_http_headers(packet[http.HTTPResponse].fields)
                 
         return http_info
-
     def decode_dns(self, packet):
         """Decode DNS protocol details"""
         dns_info = {}
@@ -280,7 +262,6 @@ class ProtocolDecoder:
                 } for rr in dns.an]
                 
         return dns_info
-
     def decode_tls(self, packet):
         """Decode TLS protocol details"""
         tls_info = {}
@@ -300,7 +281,6 @@ class ProtocolDecoder:
                 tls_info['cipher_suite'] = self.get_cipher_suite_name(tls['TLSServerHello'].cipher_suite)
                 
         return tls_info
-
     def decode_payload(self, packet):
         """Decode packet payload with multiple encoding attempts"""
         payload_info = {}
@@ -347,7 +327,6 @@ class ProtocolDecoder:
                 pass
                 
         return payload_info
-
     def identify_protocols(self, packet):
         """Identify all protocols in the packet"""
         protocols = []
@@ -383,7 +362,6 @@ class ProtocolDecoder:
             protocols.append('TLS')
             
         return protocols
-
     # Helper methods
     def get_raw_data(self, packet):
         """Get raw packet data"""
@@ -392,7 +370,6 @@ class ProtocolDecoder:
             'length': len(packet),
             'summary': packet.summary()
         }
-
     def decode_tcp_flags(self, flags):
         """Decode TCP flags"""
         flag_map = {
@@ -406,7 +383,6 @@ class ProtocolDecoder:
             'C': 'CWR'
         }
         return [flag_map[f] for f in str(flags)]
-
     def decode_ip_flags(self, flags):
         """Decode IP flags"""
         flag_map = {
@@ -414,7 +390,6 @@ class ProtocolDecoder:
             'MF': 'More Fragments'
         }
         return [flag_map[f] for f in str(flags).split('+') if f in flag_map]
-
     def get_icmp_type_name(self, type_id):
         """Get ICMP type name"""
         icmp_types = {
@@ -425,7 +400,6 @@ class ProtocolDecoder:
             11: 'Time Exceeded'
         }
         return icmp_types.get(type_id, f'Unknown ({type_id})')
-
     def decode_http_headers(self, fields):
         """Decode HTTP headers"""
         headers = {}
@@ -434,7 +408,6 @@ class ProtocolDecoder:
                 header_name = field.replace('Http_', '').replace('_', '-')
                 headers[header_name] = fields[field]
         return headers
-
     def get_tls_version(self, version):
         """Get TLS version name"""
         versions = {
@@ -445,7 +418,6 @@ class ProtocolDecoder:
             0x0304: 'TLS 1.3'
         }
         return versions.get(version, f'Unknown (0x{version:04x})')
-
     def get_tls_type(self, type_id):
         """Get TLS content type name"""
         types = {
@@ -455,7 +427,6 @@ class ProtocolDecoder:
             23: 'Application Data'
         }
         return types.get(type_id, f'Unknown ({type_id})')
-
     def decode_tcp_options(self, options):
         """Decode TCP options"""
         decoded_options = {}
@@ -465,7 +436,6 @@ class ProtocolDecoder:
             else:
                 decoded_options[option[0]] = None
         return decoded_options
-
     def get_dns_type(self, qtype):
         """Get DNS query type name"""
         dns_types = {
@@ -479,7 +449,6 @@ class ProtocolDecoder:
             28: 'AAAA'
         }
         return dns_types.get(qtype, f'Unknown ({qtype})')
-
     def get_dns_rdata(self, rr):  
        """Get formatted DNS record data"""  
        if rr.type == 1:  # A record  
@@ -491,8 +460,6 @@ class ProtocolDecoder:
        elif rr.type == 15:  # MX record  
           return f"{rr.preference} {rr.exchange.decode()}" if hasattr(rr, 'exchange') else None  
        return str(rr) if hasattr(rr, '__str__') else "Unknown"
-
-
 class EncodingDetector:
     def __init__(self):
         self.patterns = {
@@ -511,7 +478,6 @@ class EncodingDetector:
         except ImportError:
             self.zlib_available = False
             print("Warning: zlib module not available")
-
     def calculate_entropy(self, data):
         if not data:
             return 0
@@ -521,16 +487,13 @@ class EncodingDetector:
             if p_x > 0:
                 entropy += -p_x * math.log2(p_x)
         return entropy
-
     def detect_encoding(self, data):
         results = []
         try:
             str_data = data.decode('utf-8', errors='ignore')
         except:
             str_data = ""
-
         entropy = self.calculate_entropy(data)
-
         # Check for zlib compression first
         if self.zlib_available:
             try:
@@ -545,14 +508,12 @@ class EncodingDetector:
                         pass
             except:
                 pass
-
         # Base64 detection
         if self.patterns['base64'].match(str_data):
             try:
                 decoded = base64.b64decode(data + b'=' * (-len(data) % 4))
                 if self.is_printable(decoded):
                     results.append(('Base64', decoded, 0.9))
-
                 # Check if base64 decoded data is zlib compressed
                 if self.zlib_available:
                     try:
@@ -563,14 +524,12 @@ class EncodingDetector:
                         pass
             except:
                 pass
-
         # Hex detection
         if self.patterns['hex'].match(str_data):
             try:
                 decoded = bytes.fromhex(str_data)
                 if self.is_printable(decoded):
                     results.append(('Hex', decoded, 0.8))
-
                 # Check if hex decoded data is zlib compressed
                 if self.zlib_available:
                     try:
@@ -581,31 +540,25 @@ class EncodingDetector:
                         pass
             except:
                 pass
-
         # JWT detection
         if self.patterns['jwt'].match(str_data):
             results.append(('JWT', None, 0.95))
-
         # Compressed/Encrypted detection
         if entropy > 7.5:
             results.append(('Compressed', None, 0.7))
         if 7.8 <= entropy <= 8.0:
             results.append(('Encrypted', None, 0.8))
-
         return results if results else []
-
     def is_printable(self, data):
         try:
             text = data.decode('utf-8')
             return all(char in string.printable for char in text)
         except:
             return False
-
 class PacketDecoder:
     def __init__(self):
         self.protocol_decoder = ProtocolDecoder()
         self.encoding_detector = EncodingDetector()
-
     def decode_packet(self, packet):
         """Complete packet decoding and analysis"""
         # Get basic protocol decoding
@@ -615,9 +568,7 @@ class PacketDecoder:
         if packet.haslayer('Raw'):
             payload = bytes(packet[scapy.Raw].load)
             decoded['payload_analysis'] = self.analyze_payload(payload)
-
         return decoded
-
     def analyze_payload(self, payload):
         """Comprehensive payload analysis"""
         analysis = {
@@ -634,7 +585,6 @@ class PacketDecoder:
                 analysis['ascii'] = payload.decode('ascii', errors='replace')
             except:
                 pass
-
         # Detect encodings
         encodings = self.encoding_detector.detect_encoding(payload)
         if encodings:
@@ -658,14 +608,11 @@ class PacketDecoder:
                             'hex': decoded.hex() if isinstance(decoded, bytes) else None
                         }
                 analysis['detected_encodings'].append(encoding_info)
-
         # Try to identify file signatures
         file_type = self.identify_file_signature(payload)
         if file_type:
             analysis['file_type'] = file_type
-
         return analysis
-
     def identify_file_signature(self, data):
         """Identify file type based on magic numbers"""
         signatures = {
@@ -690,7 +637,6 @@ class PacketDecoder:
             if data.startswith(signature):
                 return filetype
         return None
-
 class CoordinateAnalyzer:
     def __init__(self):
         self.formats = {
@@ -699,14 +645,12 @@ class CoordinateAnalyzer:
             'int32': '<iii'     # Little-endian, 3 integers
         }
         self.csv_data = None
-
     def load_csv(self, filename):
         try:
             self.csv_data = pd.read_csv(filename)
             return True
         except Exception as e:
             raise Exception(f"Failed to load CSV: {str(e)}")
-
     def find_coordinates(self, payload, timestamp):
         results = []
         for format_name, format_str in self.formats.items():
@@ -724,7 +668,6 @@ class CoordinateAnalyzer:
                 except:
                     continue
         return results
-
     def is_valid_coordinate(self, x, y, z):
         return all([
             isinstance(x, (int, float)),
@@ -734,19 +677,16 @@ class CoordinateAnalyzer:
             abs(y) < 1e6,
             abs(z) < 1e6
         ])
-
 class PacketAnalyzerGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Advanced Network Packet Analyzer")
         self.root.geometry("1200x800")
-
         # Initialize analyzers
         self.detector = EncodingDetector()
         self.packet_decoder = PacketDecoder()
         self.coordinate_analyzer = CoordinateAnalyzer()
         self.payload_decoder = PayloadDecoder()
-        self.location_tracker = LocationTracker()  
         
         # Initialize packet storage
         self.packets = []
@@ -756,20 +696,16 @@ class PacketAnalyzerGUI:
         # Initialize live scanner
         self.scanner = LivePacketScanner(self.process_live_packet)
         self.is_scanning = False
-
         # Create GUI components
         self.create_gui()
         self.add_protocol_filters()
         self.add_export_options()
         self.setup_live_capture_controls()
         self.setup_protocol_analysis_frame()
-        self.setup_location_tracking_frame()  
-
     def setup_live_capture_controls(self):
         """Add live capture controls to the GUI"""
         capture_frame = ttk.LabelFrame(self.root, text="Live Capture")
         capture_frame.pack(fill='x', padx=15, pady=2)
-
         # Interface selection
         self.interface_var = tk.StringVar()
         self.interface_map = self.scanner.get_available_interfaces()
@@ -784,70 +720,56 @@ class PacketAnalyzerGUI:
         ttk.Label(capture_frame, text="Interface:").pack(side='left', padx=2)
         interface_menu = ttk.Combobox(capture_frame, textvariable=self.interface_var, values=interface_names)
         interface_menu.pack(side='left', padx=2)
-
         # Start/Stop capture button
         self.capture_button = ttk.Button(capture_frame, text="Start Capture", command=self.toggle_capture)
         self.capture_button.pack(side='left', padx=2)
-
         # Packet count label
         self.packet_count_var = tk.StringVar(value="Packets: 0")
         ttk.Label(capture_frame, textvariable=self.packet_count_var).pack(side='left', padx=2)
-
     def setup_protocol_analysis_frame(self):
         """Setup the protocol analysis frame with tabs"""
         protocol_frame = ttk.LabelFrame(self.root, text="Protocol Analysis")
         protocol_frame.pack(fill='x', padx=15, pady=2)
-
         # Create notebook for protocol tabs
         self.protocol_notebook = ttk.Notebook(protocol_frame)
         self.protocol_notebook.pack(fill='both', expand=True, padx=5, pady=5)
-
         # Create protocol overview tab
         protocol_tab = ttk.Frame(self.protocol_notebook)
         self.protocol_text = scrolledtext.ScrolledText(protocol_tab, height=8)
         self.protocol_text.pack(fill='both', expand=True)
         self.protocol_notebook.add(protocol_tab, text='Protocol Overview')
-
         # Create HTTP tab
         http_tab = ttk.Frame(self.protocol_notebook)
         self.http_text = scrolledtext.ScrolledText(http_tab, height=8)
         self.http_text.pack(fill='both', expand=True)
         self.protocol_notebook.add(http_tab, text='HTTP')
-
         # Create DNS tab
         dns_tab = ttk.Frame(self.protocol_notebook)
         self.dns_text = scrolledtext.ScrolledText(dns_tab, height=8)
         self.dns_text.pack(fill='both', expand=True)
         self.protocol_notebook.add(dns_tab, text='DNS')
-
         # Create TLS tab
         tls_tab = ttk.Frame(self.protocol_notebook)
         self.tls_text = scrolledtext.ScrolledText(tls_tab, height=8)
         self.tls_text.pack(fill='both', expand=True)
         self.protocol_notebook.add(tls_tab, text='TLS/SSL')
-
     def setup_location_tracking_frame(self):
         """Setup the location tracking frame"""
         location_frame = ttk.LabelFrame(self.root, text="Location Tracking")
         location_frame.pack(fill='x', padx=15, pady=2)
-
         # Location tracking controls
         control_frame = ttk.Frame(location_frame)
         control_frame.pack(fill='x', padx=5, pady=2)
-
         # Start/Stop logging button
         self.log_button = ttk.Button(control_frame, text="Start Location Logging", 
                                    command=self.toggle_location_logging)
         self.log_button.pack(side='left', padx=2)
-
         # Current location display
         self.location_var = tk.StringVar(value="Location: Not detected")
         ttk.Label(control_frame, textvariable=self.location_var).pack(side='left', padx=10)
-
         # Location history
         self.location_text = scrolledtext.ScrolledText(location_frame, height=6)
         self.location_text.pack(fill='x', padx=5, pady=5)
-
     def toggle_location_logging(self):
         """Toggle location logging on/off"""
         if not hasattr(self, 'logging_active') or not self.logging_active:
@@ -860,36 +782,29 @@ class PacketAnalyzerGUI:
             self.log_button.configure(text="Start Location Logging")
             self.location_tracker.stop_logging()
             self.status_var.set("Location logging stopped")
-
-    def update_location_display(self, location):  
-       """Update location display with new coordinates"""  
-       if location:  
-          self.location_var.set(  
-            f"Location: X: {location['x']:.2f}, Y: {location['y']:.2f}, Z: {location['z']:.2f}"  
-          )  
-       
-          # Update history display  
-          self.location_text.delete(1.0, tk.END)  
-          history = self.location_tracker.get_location_history()  
-          for loc in history:  
-            timestamp = datetime.fromtimestamp(loc['timestamp']).strftime('%H:%M:%S.%f')[:-3]  
-            self.location_text.insert(tk.END,  
-               f"[{timestamp}] X: {loc['x']:.2f}, Y: {loc['y']:.2f}, Z: {loc['z']:.2f}\n"  
-            )  
-       
-          # Auto-scroll to show latest entries  
-          self.location_text.see(tk.END)
-
+    def update_location_display(self, location):
+        """Update location display with new coordinates"""
+        if location:
+            self.location_var.set(
+                f"Location: X: {location['x']:.2f}, Y: {location['y']:.2f}, Z: {location['z']:.2f}"
+            )
+            
+            # Update history display
+            self.location_text.delete(1.0, tk.END)
+            history = self.location_tracker.get_location_history()
+            for loc in history:
+                timestamp = datetime.fromtimestamp(loc['timestamp']).strftime('%H:%M:%S.%f')[:-3]
+                self.location_text.insert(tk.END, 
+                    f"[{timestamp}] X: {loc['x']:.2f}, Y: {loc['y']:.2f}, Z: {loc['z']:.2f}\n"
+                )
     def create_gui(self):
         """Create the main GUI components"""
         # Create main container
         main_container = ttk.Frame(self.root)
         main_container.pack(fill='both', expand=True, padx=10, pady=5)
-
         # Top menu
         top_menu = tk.Menu(self.root)
         self.root.config(menu=top_menu)
-
         file_menu = tk.Menu(top_menu, tearoff=0)
         top_menu.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Open PCAP", command=self.open_pcap)
@@ -897,11 +812,9 @@ class PacketAnalyzerGUI:
         file_menu.add_command(label="Export to JSON", command=self.export_to_json)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
-
         # Toolbar
         toolbar = tk.Frame(main_container)
         toolbar.pack(fill='x', padx=5, pady=5)
-
         tk.Button(toolbar, text="Open", command=self.open_pcap).pack(side='left', padx=2)
         tk.Button(toolbar, text="Save", command=self.save_analysis).pack(side='left', padx=2)
         tk.Button(toolbar, text="Export", command=self.export_to_json).pack(side='left', padx=2)
@@ -909,11 +822,9 @@ class PacketAnalyzerGUI:
         tk.Button(toolbar, text="Reset", command=self.reset_filters).pack(side='left', padx=2)
         tk.Button(toolbar, text="Load CSV", command=self.load_coordinate_csv).pack(side='left', padx=2)
         tk.Button(toolbar, text="Find Coordinates", command=self.analyze_coordinates).pack(side='left', padx=2)
-
         # Create main content area with PanedWindow
         paned_window = ttk.PanedWindow(main_container, orient='horizontal')
         paned_window.pack(fill='both', expand=True, pady=5)
-
         # Left panel - Packet List
         left_frame = ttk.Frame(paned_window)
         self.packet_tree = ttk.Treeview(left_frame, columns=('No.', 'Time', 'Source', 'Destination', 'Protocol', 'Length'))
@@ -923,57 +834,44 @@ class PacketAnalyzerGUI:
         self.packet_tree.heading('Destination', text='Destination')
         self.packet_tree.heading('Protocol', text='Protocol')
         self.packet_tree.heading('Length', text='Length')
-
         self.packet_tree.column('No.', width=50)
         self.packet_tree.column('Time', width=100)
         self.packet_tree.column('Source', width=120)
         self.packet_tree.column('Destination', width=120)
         self.packet_tree.column('Protocol', width=70)
         self.packet_tree.column('Length', width=60)
-
         scrollbar = ttk.Scrollbar(left_frame, orient='vertical', command=self.packet_tree.yview)
         self.packet_tree.configure(yscrollcommand=scrollbar.set)
-
         self.packet_tree.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
-
         paned_window.add(left_frame, weight=1)
-
         # Right panel with notebook
         right_frame = ttk.Frame(paned_window)
         self.right_notebook = ttk.Notebook(right_frame)
         self.right_notebook.pack(fill='both', expand=True)
-
         # Details tab
         details_frame = ttk.Frame(self.right_notebook)
         self.details_text = scrolledtext.ScrolledText(details_frame, height=10)
         self.details_text.pack(fill='both', expand=True, padx=5, pady=5)
         self.right_notebook.add(details_frame, text='Packet Details')
-
         # Payload tab
         payload_frame = ttk.Frame(self.right_notebook)
         self.payload_text = scrolledtext.ScrolledText(payload_frame, height=10)
         self.payload_text.pack(fill='both', expand=True, padx=5, pady=5)
         self.right_notebook.add(payload_frame, text='Payload Analysis')
-
         paned_window.add(right_frame, weight=2)
-
         # Status bar
         self.status_var = tk.StringVar()
         status_bar = ttk.Label(main_container, textvariable=self.status_var, relief='sunken', anchor='w')
         status_bar.pack(fill='x', pady=2)
-
         # Filter variable
         self.filter_var = tk.StringVar()
-
         # Bind events
         self.packet_tree.bind('<<TreeviewSelect>>', self.on_packet_select)
-
     def add_protocol_filters(self):
         """Add quick filter buttons for common protocols"""
         filter_frame = ttk.LabelFrame(self.root, text="Quick Filters")
         filter_frame.pack(fill='x', padx=15, pady=2)
-
         ttk.Button(filter_frame, text="TCP Only",
                   command=lambda: self.apply_quick_filter("TCP")).pack(side='left', padx=2)
         ttk.Button(filter_frame, text="UDP Only",
@@ -984,12 +882,10 @@ class PacketAnalyzerGUI:
                   command=lambda: self.apply_quick_filter("DNS")).pack(side='left', padx=2)
         ttk.Button(filter_frame, text="Reset Filters",
                   command=self.reset_filters).pack(side='left', padx=2)
-
     def add_export_options(self):
         """Add export menu options"""
         export_menu = tk.Menu(self.root)
         self.root.config(menu=export_menu)
-
         file_menu = tk.Menu(export_menu, tearoff=0)
         export_menu.add_cascade(label="File", menu=file_menu)
         file_menu.add_command(label="Open PCAP", command=self.open_pcap)
@@ -997,7 +893,6 @@ class PacketAnalyzerGUI:
         file_menu.add_command(label="Export to JSON", command=self.export_to_json)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
-
     def toggle_capture(self):
         """Toggle live packet capture on/off"""
         if not self.is_scanning:
@@ -1017,7 +912,6 @@ class PacketAnalyzerGUI:
             self.is_scanning = False
             self.capture_button.configure(text="Start Capture")
             self.status_var.set("Live capture stopped")
-
     def process_live_packet(self, packet):
         """Process each captured packet"""
         self.packets.append(packet)
@@ -1039,9 +933,32 @@ class PacketAnalyzerGUI:
         # Update packet count
         count = len(self.packets)
         self.root.after(0, self.packet_count_var.set, f"Packets: {count}")
-
-    
-
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Advanced Network Packet Analyzer")
+        self.root.geometry("1200x800")
+        # Initialize analyzers
+        self.detector = EncodingDetector()
+        self.packet_decoder = PacketDecoder()
+        self.coordinate_analyzer = CoordinateAnalyzer()
+        self.payload_decoder = PayloadDecoder()
+        self.location_tracker = LocationTracker()  # Add location tracker
+        
+        # Initialize packet storage
+        self.packets = []
+        self.original_packets = []
+        self.current_packet_index = 0
+        
+        # Initialize live scanner
+        self.scanner = LivePacketScanner(self.process_live_packet)
+        self.is_scanning = False
+        # Create GUI components
+        self.create_gui()
+        self.add_protocol_filters()
+        self.add_export_options()
+        self.setup_live_capture_controls()
+        self.setup_protocol_analysis_frame()
+        self.setup_location_tracking_frame()  # Add location tracking frame
     def add_packet_to_list(self, packet, decoded_packet=None):
         """Add a single packet to the packet list"""
         try:
@@ -1056,7 +973,6 @@ class PacketAnalyzerGUI:
             else:
                 src = "Unknown"
                 dst = "Unknown"
-
             # Get the highest layer protocol
             if decoded_packet.get('layer7', {}).get('protocol'):
                 proto = decoded_packet['layer7']['protocol']
@@ -1064,7 +980,6 @@ class PacketAnalyzerGUI:
                 proto = decoded_packet['layer4']['type']
             else:
                 proto = decoded_packet.get('layer3', {}).get('type', 'Unknown')
-
             length = decoded_packet['raw_data']['length']
             
             self.packet_tree.insert('', 'end', values=(len(self.packets), time, src, dst, proto, length))
@@ -1073,25 +988,20 @@ class PacketAnalyzerGUI:
             self.packet_tree.yview_moveto(1)
         except Exception as e:
             print(f"Error adding packet to list: {e}")
-
     def on_packet_select(self, event):
         """Handle packet selection"""
         selection = self.packet_tree.selection()
         if not selection:
             return
-
         item = selection[0]
         packet_num = int(self.packet_tree.item(item)['values'][0]) - 1
         packet = self.packets[packet_num]
-
         # Perform complete packet analysis
         decoded_packet = self.packet_decoder.decode_packet(packet)
-
         # Update all display areas
         self.update_packet_details(decoded_packet)
         self.update_payload_analysis(decoded_packet)
         self.update_protocol_tabs(decoded_packet)
-
     def update_packet_details(self, decoded_packet):
         """Update packet details pane"""
         self.details_text.delete(1.0, tk.END)
@@ -1100,7 +1010,6 @@ class PacketAnalyzerGUI:
         self.details_text.insert(tk.END, "Timestamp:\n")
         self.format_dict_output(self.details_text, decoded_packet['timestamp'], indent=2)
         self.details_text.insert(tk.END, "\n")
-
         # Display layer information
         for layer in ['layer2', 'layer3', 'layer4', 'layer7']:
             if layer in decoded_packet:
@@ -1205,14 +1114,12 @@ class PacketAnalyzerGUI:
                             for key, value in result.items():
                                 self.payload_text.insert(tk.END, f"  {key}: {value}\n")
                             self.payload_text.insert(tk.END, "\n")
-
                 except Exception as e:
                     self.payload_text.insert(tk.END, f"Error analyzing payload: {str(e)}")
             else:
                 self.payload_text.insert(tk.END, "No raw payload data available")
         else:
             self.payload_text.insert(tk.END, "No payload data available")
-
     def update_protocol_tabs(self, decoded_packet):
         """Update protocol-specific analysis tabs"""
         # Update Protocol Overview tab
@@ -1220,28 +1127,24 @@ class PacketAnalyzerGUI:
         self.protocol_text.insert(tk.END, "Detected Protocols:\n")
         for proto in decoded_packet['protocols']:
             self.protocol_text.insert(tk.END, f"- {proto}\n")
-
         # Update HTTP tab
         self.http_text.delete(1.0, tk.END)
         if 'http_analysis' in decoded_packet:
             self.format_dict_output(self.http_text, decoded_packet['http_analysis'])
         else:
             self.http_text.insert(tk.END, "No HTTP data detected")
-
         # Update DNS tab
         self.dns_text.delete(1.0, tk.END)
         if 'dns_analysis' in decoded_packet:
             self.format_dict_output(self.dns_text, decoded_packet['dns_analysis'])
         else:
             self.dns_text.insert(tk.END, "No DNS data detected")
-
         # Update TLS tab
         self.tls_text.delete(1.0, tk.END)
         if 'tls_analysis' in decoded_packet:
             self.format_dict_output(self.tls_text, decoded_packet['tls_analysis'])
         else:
             self.tls_text.insert(tk.END, "No TLS/SSL data detected")
-
     def format_dict_output(self, text_widget, data, indent=0):
         """Format dictionary output for text widgets"""
         indent_str = " " * indent
@@ -1260,7 +1163,6 @@ class PacketAnalyzerGUI:
                     text_widget.insert(tk.END, f"{indent_str}- {item}\n")
         else:
             text_widget.insert(tk.END, f"{indent_str}{data}\n")
-
     def apply_quick_filter(self, protocol):
         """Apply quick filter for specific protocols"""
         if protocol == "TCP":
@@ -1274,16 +1176,13 @@ class PacketAnalyzerGUI:
         elif protocol == "DNS":
             self.packets = [p for p in self.original_packets if scapy.UDP in p and
                           (p[scapy.UDP].sport == 53 or p[scapy.UDP].dport == 53)]
-
         self.update_packet_list()
         self.status_var.set(f"Filtered: showing {len(self.packets)} {protocol} packets")
-
     def reset_filters(self):
         """Reset to original packet list"""
         self.packets = self.original_packets.copy()
         self.update_packet_list()
         self.status_var.set(f"Filters reset: showing all {len(self.packets)} packets")
-
     def open_pcap(self):
         """Open and load a PCAP file"""
         filename = filedialog.askopenfilename(
@@ -1295,12 +1194,10 @@ class PacketAnalyzerGUI:
         if filename:
             self.status_var.set("Loading PCAP file...")
             self.root.update()
-
             # Use threading to prevent GUI freeze
             thread = threading.Thread(target=self.load_pcap, args=(filename,))
             thread.daemon = True
             thread.start()
-
     def load_pcap(self, filename):
         """Load packets from PCAP file"""
         try:
@@ -1316,13 +1213,11 @@ class PacketAnalyzerGUI:
                 except Exception as e:
                     print(f"Error decoding packet: {e}")
                     decoded_packets.append(None)
-
             self.root.after(0, lambda: self.update_packet_list_with_decoded(decoded_packets))
             self.root.after(0, lambda: self.status_var.set(f"Loaded {len(self.packets)} packets"))
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to load PCAP: {str(e)}"))
             self.root.after(0, lambda: self.status_var.set("Error loading PCAP"))
-
     def update_packet_list_with_decoded(self, decoded_packets):
         """Update packet list with pre-decoded packet information"""
         self.packet_tree.delete(*self.packet_tree.get_children())
@@ -1341,18 +1236,15 @@ class PacketAnalyzerGUI:
                     dst = packet[scapy.IP].dst if scapy.IP in packet else "Unknown"
                     proto = "TCP" if scapy.TCP in packet else "UDP" if scapy.UDP in packet else "Unknown"
                     length = len(packet)
-
                 self.packet_tree.insert('', 'end', values=(i, time, src, dst, proto, length))
             except Exception as e:
                 print(f"Error updating packet list: {e}")
-
     def apply_filter(self):
         """Apply custom filter to packets"""
         filter_text = self.filter_var.get().strip()
         if not filter_text:
             self.reset_filters()
             return
-
         try:
             filtered_packets = []
             for packet in self.original_packets:
@@ -1366,30 +1258,25 @@ class PacketAnalyzerGUI:
                     'src_port': packet[scapy.TCP].sport if scapy.TCP in packet else None,
                     'dst_port': packet[scapy.TCP].dport if scapy.TCP in packet else None,
                 }
-
                 try:
                     if eval(filter_text, {}, filter_map):
                         filtered_packets.append(packet)
                 except:
                     continue
-
             self.packets = filtered_packets
             self.update_packet_list()
             self.status_var.set(f"Showing {len(filtered_packets)} filtered packets")
         except Exception as e:
             messagebox.showerror("Filter Error", f"Invalid filter: {str(e)}")
-
     def export_to_json(self):
         """Export packet analysis to JSON format"""
         if not self.packets:
             messagebox.showwarning("Warning", "No packets to export")
             return
-
         filename = filedialog.asksaveasfilename(
             defaultextension=".json",
             filetypes=[("JSON files", "*.json"), ("All files", "*.*")]
         )
-
         if filename:
             try:
                 packet_data = []
@@ -1397,32 +1284,26 @@ class PacketAnalyzerGUI:
                     # Get complete packet analysis
                     decoded = self.packet_decoder.decode_packet(packet)
                     packet_data.append(decoded)
-
                 with open(filename, 'w') as f:
                     json.dump(packet_data, f, indent=2, default=str)
-
                 messagebox.showinfo("Success", "Data exported successfully")
                 self.status_var.set("Data exported to JSON")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to export data: {str(e)}")
-
     def save_analysis(self):
         """Save detailed analysis to a text file"""
         if not self.packets:
             messagebox.showwarning("Warning", "No packets to save")
             return
-
         filename = filedialog.asksaveasfilename(
             defaultextension=".txt",
             filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
         )
-
         if filename:
             try:
                 with open(filename, 'w') as f:
                     f.write("Network Packet Analysis Report\n")
                     f.write("=" * 50 + "\n\n")
-
                     # Write summary statistics
                     f.write("Summary Statistics:\n")
                     f.write("-" * 20 + "\n")
@@ -1438,7 +1319,6 @@ class PacketAnalyzerGUI:
                     for proto, count in protocol_counts.items():
                         f.write(f"{proto} Packets: {count}\n")
                     f.write("\n")
-
                     # Write detailed packet analysis
                     for i, packet in enumerate(self.packets, 1):
                         f.write(f"\nPacket {i}\n")
@@ -1462,12 +1342,10 @@ class PacketAnalyzerGUI:
                             self.write_dict_to_file(f, decoded['payload'], indent=2)
                         
                         f.write("\n" + "=" * 50 + "\n")
-
                 messagebox.showinfo("Success", "Analysis saved successfully")
                 self.status_var.set("Analysis saved to file")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to save analysis: {str(e)}")
-
     def write_dict_to_file(self, file, data, indent=0):
         """Write dictionary data to file with formatting"""
         indent_str = " " * indent
@@ -1486,7 +1364,6 @@ class PacketAnalyzerGUI:
                     file.write(f"{indent_str}- {item}\n")
         else:
             file.write(f"{indent_str}{data}\n")
-
     def load_coordinate_csv(self):
         """Load coordinate CSV file for analysis"""
         filename = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
@@ -1496,7 +1373,6 @@ class PacketAnalyzerGUI:
                 self.status_var.set(f"Loaded coordinate CSV file")
             except Exception as e:
                 messagebox.showerror("Error", str(e))
-
     def analyze_coordinates(self):
         """Perform coordinate analysis on packets"""
         if not hasattr(self, 'packets') or not self.packets:
@@ -1506,7 +1382,6 @@ class PacketAnalyzerGUI:
         if self.coordinate_analyzer.csv_data is None:
             messagebox.showwarning("Warning", "Please load coordinate CSV file first")
             return
-
         results_window = tk.Toplevel(self.root)
         results_window.title("Coordinate Analysis Results")
         results_window.geometry("800x600")
@@ -1521,21 +1396,17 @@ class PacketAnalyzerGUI:
         # Results text widget
         results_text = scrolledtext.ScrolledText(results_window)
         results_text.pack(fill='both', expand=True, padx=5, pady=5)
-
         total_matches = 0
         try:
             csv_data = self.coordinate_analyzer.csv_data
             csv_data['ID'] = pd.to_numeric(csv_data['ID'], errors='coerce')
-
             results_text.insert('end', "Analyzing packets for coordinate matches...\n\n")
             results_text.update()
-
             for packet_index, packet in enumerate(self.packets, 1):
                 decoded = self.packet_decoder.decode_packet(packet)
                 
                 if 'payload' not in decoded or not decoded['payload']:
                     continue
-
                 payload = bytes.fromhex(decoded['payload']['raw']['hex'])
                 coords = self.coordinate_analyzer.find_coordinates(payload, decoded['timestamp']['epoch'])
                 
@@ -1547,7 +1418,6 @@ class PacketAnalyzerGUI:
                             (abs(csv_data['y'] - coord['y']) < 0.001) &
                             (abs(csv_data['z'] - coord['z']) < 0.001)
                         ]
-
                         if not matches.empty:
                             total_matches += 1
                             results_text.insert('end',
@@ -1562,16 +1432,13 @@ class PacketAnalyzerGUI:
                             )
                             results_text.see('end')
                             results_text.update()
-
             if total_matches == 0:
                 results_text.insert('end', "No matching coordinates found.\n")
             results_text.insert('1.0', f"Analysis complete: Found {total_matches} matching coordinates.\n{'='*50}\n\n")
             
             self.status_var.set(f"Coordinate analysis complete: {total_matches} matches found")
-
         except Exception as e:
             messagebox.showerror("Error", f"Coordinate analysis failed: {str(e)}")
-
 class PayloadDecoder:
     def __init__(self):
         self.known_signatures = {
@@ -1605,7 +1472,6 @@ class PayloadDecoder:
             'uint16_le': struct.Struct('<H'),
             'uint16_be': struct.Struct('>H'),
         }
-
     def analyze_payload(self, data: bytes) -> dict:
         """Comprehensive payload analysis"""
         result = {
@@ -1619,7 +1485,6 @@ class PayloadDecoder:
             'structure_analysis': self.analyze_structure(data)
         }
         return result
-
     def create_hex_dump(self, data: bytes) -> list:
         """Create formatted hex dump with metadata"""
         hex_dump = []
@@ -1633,7 +1498,6 @@ class PayloadDecoder:
             }
             hex_dump.append(hex_line)
         return hex_dump
-
     def try_decode_chunk(self, chunk: bytes) -> dict:
         """Try to decode each chunk in various ways"""
         decoded = {}
@@ -1650,7 +1514,6 @@ class PayloadDecoder:
                         decoded[name] = value
                 except:
                     pass
-
         # Try text decodings
         encodings = ['utf-8', 'ascii', 'utf-16', 'utf-32']
         for encoding in encodings:
@@ -1660,16 +1523,13 @@ class PayloadDecoder:
                     decoded[encoding] = text
             except:
                 pass
-
         return decoded
-
     def detect_file_type(self, data: bytes) -> str:
         """Detect file type based on signatures and content analysis"""
         # Check for known file signatures
         for signature, filetype in self.known_signatures.items():
             if data.startswith(signature):
                 return filetype
-
         # Additional content-based detection
         if data.startswith(b'<?xml'):
             return 'XML'
@@ -1683,7 +1543,6 @@ class PayloadDecoder:
             return 'BINARY'
             
         return 'UNKNOWN'
-
     def analyze_data_patterns(self, data: bytes) -> dict:
         """Analyze for common data patterns"""
         patterns = {
@@ -1693,7 +1552,6 @@ class PayloadDecoder:
             'structured': self.detect_structured_data(data)
         }
         return patterns
-
     def find_number_sequences(self, data: bytes) -> list:
         """Find sequences of numbers in different formats"""
         sequences = []
@@ -1720,13 +1578,11 @@ class PayloadDecoder:
                 except:
                     continue
         return sequences
-
     def find_string_sequences(self, data: bytes) -> list:
         """Find viable string sequences"""
         strings = []
         current_string = []
         current_offset = None
-
         for i, byte in enumerate(data):
             if 32 <= byte <= 126:  # Printable ASCII
                 if current_string == []:
@@ -1741,7 +1597,6 @@ class PayloadDecoder:
                     })
                 current_string = []
                 current_offset = None
-
         # Don't forget last string
         if len(current_string) >= 4:
             strings.append({
@@ -1749,15 +1604,12 @@ class PayloadDecoder:
                 'string': ''.join(current_string),
                 'length': len(current_string)
             })
-
         return strings
-
     def find_repeating_patterns(self, data: bytes) -> list:
         """Find repeating byte patterns"""
         patterns = []
         min_pattern_len = 2
         max_pattern_len = 8
-
         for pattern_len in range(min_pattern_len, max_pattern_len + 1):
             for i in range(len(data) - pattern_len * 2):
                 pattern = data[i:i+pattern_len]
@@ -1776,9 +1628,7 @@ class PayloadDecoder:
                         'repeats': repeats
                     })
                     i = pos  # Skip past this pattern
-
         return patterns
-
     def detect_structured_data(self, data: bytes) -> dict:
         """Detect potential structured data formats"""
         structure = {
@@ -1786,7 +1636,6 @@ class PayloadDecoder:
             'field_separators': [],
             'record_sizes': []
         }
-
         # Look for common field separators
         separators = [b',', b'|', b'\t', b';']
         for sep in separators:
@@ -1796,7 +1645,6 @@ class PayloadDecoder:
                     'separator': sep.hex(),
                     'count': count
                 })
-
         # Look for potential record sizes
         if len(data) >= 8:
             for size in range(4, 17):  # Common record sizes
@@ -1812,9 +1660,7 @@ class PayloadDecoder:
                             'count': len(data) // size,
                             'consistency': consistency
                         })
-
         return structure
-
     def analyze_text(self, data: bytes) -> dict:
         """Analyze text representations"""
         text_analysis = {}
@@ -1831,9 +1677,7 @@ class PayloadDecoder:
                     }
             except:
                 continue
-
         return text_analysis
-
     def calculate_entropy(self, data: bytes) -> float:
         """Calculate Shannon entropy of the data"""
         if not data:
@@ -1844,7 +1688,6 @@ class PayloadDecoder:
             if p_x > 0:
                 entropy += -p_x * math.log2(p_x)
         return entropy
-
     def analyze_encodings(self, data: bytes) -> dict:
         """Analyze possible encodings"""
         encodings = {}
@@ -1858,7 +1701,6 @@ class PayloadDecoder:
             }
         except:
             pass
-
         # Try hex
         try:
             hex_str = data.hex()
@@ -1869,7 +1711,6 @@ class PayloadDecoder:
                 }
         except:
             pass
-
         # Try URL encoding
         try:
             from urllib.parse import unquote
@@ -1880,9 +1721,7 @@ class PayloadDecoder:
                 }
         except:
             pass
-
         return encodings
-
     def analyze_structure(self, data: bytes) -> dict:
         """Analyze data structure patterns"""
         structure = {
@@ -1890,7 +1729,6 @@ class PayloadDecoder:
             'alignment': {},
             'boundaries': []
         }
-
         # Check byte alignment patterns
         alignments = [2, 4, 8]
         for align in alignments:
@@ -1901,7 +1739,6 @@ class PayloadDecoder:
                     aligned_positions.append(i)
             if aligned_positions:
                 structure['alignment'][align] = aligned_positions
-
         # Look for boundary markers
         common_boundaries = [b'\x00\x00', b'\xff\xff', b'\r\n', b'\n\n']
         for boundary in common_boundaries:
@@ -1917,10 +1754,7 @@ class PayloadDecoder:
                     'marker': boundary.hex(),
                     'positions': positions
                 })
-
         return structure
-
-
 class LocationTracker:
     def __init__(self):
         self.locations = []
@@ -1931,70 +1765,59 @@ class LocationTracker:
         """Start logging locations to CSV file"""
         self.log_file = open(filename, 'w')
         self.log_file.write("Timestamp,X,Y,Z,Packet_Offset,Raw_Hex\n")
-
     def stop_logging(self):
         """Stop logging and close file"""
         if self.log_file:
             self.log_file.close()
             self.log_file = None
-
-    def analyze_packet_for_location(self, packet_data: bytes, timestamp: float) -> dict:  
-       """Analyze packet data for location coordinates"""  
-       if len(packet_data) < 12:  # Need at least 12 bytes for coordinates  
-          return None  
-       
-       try:  
-          # Process in 4-byte chunks for efficiency  
-          for i in range(0, len(packet_data) - 11, 4):  
-            x = struct.unpack('<f', packet_data[i:i+4])[0]  
-          
-            # Quick range check before continuing  
-            if not (2000 < x < 3000):  # Adjust ranges for your game  
-               continue  
-            
-            y = struct.unpack('<f', packet_data[i+4:i+8])[0]  
-            if not (0 < y < 1000):  
-               continue  
-            
-            z = struct.unpack('<f', packet_data[i+8:i+12])[0]  
-            if not (1500 < z < 2500):  
-               continue  
-          
-            result = {  
-               'timestamp': timestamp,  
-               'x': x,  
-               'y': y,  
-               'z': z,  
-               'offset': i,  
-               'raw_hex': packet_data[i:i+12].hex()  
-            }  
-          
-            if self.log_file:  
-               self.log_file.write(f"{timestamp},{x},{y},{z},{i},{result['raw_hex']}\n")  
-               self.log_file.flush()  
-          
-            self.current_location = result  
-            self.locations.append(result)  
-            return result  
-            
-       except Exception as e:  
-          pass  
-            
-       return None
-
-
+    def analyze_packet_for_location(self, packet_data: bytes, timestamp: float) -> dict:
+        """Analyze packet data for location coordinates"""
+        result = None
+        
+        # Search for the location pattern
+        for i in range(len(packet_data) - 12):  # Need at least 12 bytes for 3 float32s
+            try:
+                x = struct.unpack('<f', packet_data[i:i+4])[0]
+                y = struct.unpack('<f', packet_data[i+4:i+8])[0]
+                z = struct.unpack('<f', packet_data[i+8:i+12])[0]
+                
+                # Check if these values are within reasonable game coordinates
+                # Adjust these ranges based on your game's coordinate system
+                if (2000 < x < 3000 and  # X range
+                    0 < y < 1000 and     # Y range
+                    1500 < z < 2500):    # Z range
+                    
+                    result = {
+                        'timestamp': timestamp,
+                        'x': x,
+                        'y': y,
+                        'z': z,
+                        'offset': i,
+                        'raw_hex': packet_data[i:i+12].hex()
+                    }
+                    
+                    # Log the location if logging is enabled
+                    if self.log_file:
+                        self.log_file.write(f"{datetime.fromtimestamp(timestamp).isoformat()},{x},{y},{z},{i},{result['raw_hex']}\n")
+                        self.log_file.flush()  # Ensure it's written immediately
+                    
+                    self.current_location = result
+                    self.locations.append(result)
+                    return result
+                    
+            except Exception as e:
+                continue
+                
+        return result
     def get_location_history(self, limit=10):
         """Get recent location history"""
         return self.locations[-limit:] if self.locations else []
-
     def get_current_location(self):
         """Get most recent location"""
         return self.current_location
-
 def main():
     root = tk.Tk()
     app = PacketAnalyzerGUI(root)
     root.mainloop()
-
 if __name__ == "__main__":
     main()
