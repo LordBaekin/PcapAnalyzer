@@ -23,8 +23,33 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="core\analyzer.py" />
+    <Compile Include="core\decoder.py" />
+    <Compile Include="core\scanner.py" />
+    <Compile Include="core\tracker.py" />
+    <Compile Include="core\utils.py" />
+    <Compile Include="core\__init__.py" />
+    <Compile Include="gui\interface.py" />
+    <Compile Include="gui\widgets\packet_table.py" />
+    <Compile Include="gui\widgets\statistics_view.py" />
+    <Compile Include="gui\widgets\__init__.py" />
+    <Compile Include="gui\__init__.py" />
     <Compile Include="main.py" />
     <Compile Include="PcapAnalyzer.py" />
+    <Compile Include="tests\test_analyzer.py" />
+    <Compile Include="tests\test_decoder.py" />
+    <Compile Include="tests\test_scanner.py" />
+    <Compile Include="tests\__init__.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="core\" />
+    <Folder Include="gui\" />
+    <Folder Include="gui\assets\" />
+    <Folder Include="gui\assets\icons\" />
+    <Folder Include="gui\assets\styles\" />
+    <Folder Include="gui\widgets\" />
+    <Folder Include="logs\" />
+    <Folder Include="tests\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in
