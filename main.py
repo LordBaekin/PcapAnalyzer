@@ -18,6 +18,11 @@ from queue import Queue
 import time
 import socket
 from typing import Dict, List, Tuple, Any
+import cProfile
+import pstats
+import io
+import traceback
+
 class LivePacketScanner:
     def __init__(self, packet_callback, interface=None):
         self.packet_callback = packet_callback
@@ -1815,9 +1820,57 @@ class LocationTracker:
     def get_current_location(self):
         """Get most recent location"""
         return self.current_location
+
+class AsyncProfiler:
+    def __init__(self, interval=1.0):
+        self.interval = interval
+        self.profiler = cProfile.Profile()
+        self.is_running = False
+        self.profile_thread = None
+        self.lock = threading.Lock()
+
+    def start(self):
+        self.is_running = True
+        self.profile_thread = threading.Thread(target=self._profile_loop)
+        self.profile_thread.start()
+
+    def stop(self):
+        self.is_running = False
+        if self.profile_thread:
+            self.profile_thread.join()
+
+    def _profile_loop(self):
+        while self.is_running:
+            self.profiler.enable()
+            time.sleep(self.interval)
+            self.profiler.disable()
+            
+            with self.lock:
+                s = io.StringIO()
+                ps = pstats.Stats(self.profiler, stream=s).sort_stats('cumulative')
+                ps.print_stats()
+                print(s.getvalue())
+                
+                # Optionally, save to a file
+                with open('profiling_results.txt', 'a') as f:
+                    f.write(s.getvalue())
+                    f.write('\n' + '-'*80 + '\n')
+
+            self.profiler.clear()
+
 def main():
-    root = tk.Tk()
-    app = PacketAnalyzerGUI(root)
-    root.mainloop()
+    profiler = AsyncProfiler(interval=5.0)  # Profile every 5 seconds
+    profiler.start()
+
+    try:
+        root = tk.Tk()
+        app = PacketAnalyzerGUI(root)
+        root.mainloop()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        traceback.print_exc()
+    finally:
+        profiler.stop()
+
 if __name__ == "__main__":
     main()
