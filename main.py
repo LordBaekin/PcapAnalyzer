@@ -746,6 +746,7 @@ class PacketAnalyzerGUI:
         self.packet_decoder = PacketDecoder()
         self.coordinate_analyzer = CoordinateAnalyzer()
         self.payload_decoder = PayloadDecoder()
+        self.location_tracker = LocationTracker()  
         
         # Initialize packet storage
         self.packets = []
@@ -762,6 +763,7 @@ class PacketAnalyzerGUI:
         self.add_export_options()
         self.setup_live_capture_controls()
         self.setup_protocol_analysis_frame()
+        self.setup_location_tracking_frame()  
 
     def setup_live_capture_controls(self):
         """Add live capture controls to the GUI"""
@@ -859,21 +861,24 @@ class PacketAnalyzerGUI:
             self.location_tracker.stop_logging()
             self.status_var.set("Location logging stopped")
 
-    def update_location_display(self, location):
-        """Update location display with new coordinates"""
-        if location:
-            self.location_var.set(
-                f"Location: X: {location['x']:.2f}, Y: {location['y']:.2f}, Z: {location['z']:.2f}"
-            )
-            
-            # Update history display
-            self.location_text.delete(1.0, tk.END)
-            history = self.location_tracker.get_location_history()
-            for loc in history:
-                timestamp = datetime.fromtimestamp(loc['timestamp']).strftime('%H:%M:%S.%f')[:-3]
-                self.location_text.insert(tk.END, 
-                    f"[{timestamp}] X: {loc['x']:.2f}, Y: {loc['y']:.2f}, Z: {loc['z']:.2f}\n"
-                )
+    def update_location_display(self, location):  
+       """Update location display with new coordinates"""  
+       if location:  
+          self.location_var.set(  
+            f"Location: X: {location['x']:.2f}, Y: {location['y']:.2f}, Z: {location['z']:.2f}"  
+          )  
+       
+          # Update history display  
+          self.location_text.delete(1.0, tk.END)  
+          history = self.location_tracker.get_location_history()  
+          for loc in history:  
+            timestamp = datetime.fromtimestamp(loc['timestamp']).strftime('%H:%M:%S.%f')[:-3]  
+            self.location_text.insert(tk.END,  
+               f"[{timestamp}] X: {loc['x']:.2f}, Y: {loc['y']:.2f}, Z: {loc['z']:.2f}\n"  
+            )  
+       
+          # Auto-scroll to show latest entries  
+          self.location_text.see(tk.END)
 
     def create_gui(self):
         """Create the main GUI components"""
@@ -1035,34 +1040,7 @@ class PacketAnalyzerGUI:
         count = len(self.packets)
         self.root.after(0, self.packet_count_var.set, f"Packets: {count}")
 
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Advanced Network Packet Analyzer")
-        self.root.geometry("1200x800")
-
-        # Initialize analyzers
-        self.detector = EncodingDetector()
-        self.packet_decoder = PacketDecoder()
-        self.coordinate_analyzer = CoordinateAnalyzer()
-        self.payload_decoder = PayloadDecoder()
-        self.location_tracker = LocationTracker()  # Add location tracker
-        
-        # Initialize packet storage
-        self.packets = []
-        self.original_packets = []
-        self.current_packet_index = 0
-        
-        # Initialize live scanner
-        self.scanner = LivePacketScanner(self.process_live_packet)
-        self.is_scanning = False
-
-        # Create GUI components
-        self.create_gui()
-        self.add_protocol_filters()
-        self.add_export_options()
-        self.setup_live_capture_controls()
-        self.setup_protocol_analysis_frame()
-        self.setup_location_tracking_frame()  # Add location tracking frame
+    
 
     def add_packet_to_list(self, packet, decoded_packet=None):
         """Add a single packet to the packet list"""
@@ -1960,45 +1938,50 @@ class LocationTracker:
             self.log_file.close()
             self.log_file = None
 
-    def analyze_packet_for_location(self, packet_data: bytes, timestamp: float) -> dict:
-        """Analyze packet data for location coordinates"""
-        result = None
-        
-        # Search for the location pattern
-        for i in range(len(packet_data) - 12):  # Need at least 12 bytes for 3 float32s
-            try:
-                x = struct.unpack('<f', packet_data[i:i+4])[0]
-                y = struct.unpack('<f', packet_data[i+4:i+8])[0]
-                z = struct.unpack('<f', packet_data[i+8:i+12])[0]
-                
-                # Check if these values are within reasonable game coordinates
-                # Adjust these ranges based on your game's coordinate system
-                if (2000 < x < 3000 and  # X range
-                    0 < y < 1000 and     # Y range
-                    1500 < z < 2500):    # Z range
-                    
-                    result = {
-                        'timestamp': timestamp,
-                        'x': x,
-                        'y': y,
-                        'z': z,
-                        'offset': i,
-                        'raw_hex': packet_data[i:i+12].hex()
-                    }
-                    
-                    # Log the location if logging is enabled
-                    if self.log_file:
-                        self.log_file.write(f"{datetime.fromtimestamp(timestamp).isoformat()},{x},{y},{z},{i},{result['raw_hex']}\n")
-                        self.log_file.flush()  # Ensure it's written immediately
-                    
-                    self.current_location = result
-                    self.locations.append(result)
-                    return result
-                    
-            except Exception as e:
-                continue
-                
-        return result
+    def analyze_packet_for_location(self, packet_data: bytes, timestamp: float) -> dict:  
+       """Analyze packet data for location coordinates"""  
+       if len(packet_data) < 12:  # Need at least 12 bytes for coordinates  
+          return None  
+       
+       try:  
+          # Process in 4-byte chunks for efficiency  
+          for i in range(0, len(packet_data) - 11, 4):  
+            x = struct.unpack('<f', packet_data[i:i+4])[0]  
+          
+            # Quick range check before continuing  
+            if not (2000 < x < 3000):  # Adjust ranges for your game  
+               continue  
+            
+            y = struct.unpack('<f', packet_data[i+4:i+8])[0]  
+            if not (0 < y < 1000):  
+               continue  
+            
+            z = struct.unpack('<f', packet_data[i+8:i+12])[0]  
+            if not (1500 < z < 2500):  
+               continue  
+          
+            result = {  
+               'timestamp': timestamp,  
+               'x': x,  
+               'y': y,  
+               'z': z,  
+               'offset': i,  
+               'raw_hex': packet_data[i:i+12].hex()  
+            }  
+          
+            if self.log_file:  
+               self.log_file.write(f"{timestamp},{x},{y},{z},{i},{result['raw_hex']}\n")  
+               self.log_file.flush()  
+          
+            self.current_location = result  
+            self.locations.append(result)  
+            return result  
+            
+       except Exception as e:  
+          pass  
+            
+       return None
+
 
     def get_location_history(self, limit=10):
         """Get recent location history"""
