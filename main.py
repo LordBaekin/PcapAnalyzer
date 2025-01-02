@@ -825,18 +825,19 @@ class PacketAnalyzerGUI:
         # Location history
         self.location_text = scrolledtext.ScrolledText(location_frame, height=6)
         self.location_text.pack(fill='x', padx=5, pady=5)
-    def toggle_location_logging(self):
-        """Toggle location logging on/off"""
-        if not hasattr(self, 'logging_active') or not self.logging_active:
-            self.logging_active = True
-            self.log_button.configure(text="Stop Location Logging")
-            self.location_tracker.start_logging()
-            self.status_var.set("Location logging started")
-        else:
-            self.logging_active = False
-            self.log_button.configure(text="Start Location Logging")
-            self.location_tracker.stop_logging()
-            self.status_var.set("Location logging stopped")
+
+    def toggle_location_logging(self):  
+       if not self.location_tracker.logging_active:  
+          if self.location_tracker.start_logging():  
+            self.log_button.configure(text="Stop Location Logging")  
+            self.status_var.set("Location logging started")  
+          else:  
+            self.status_var.set("Failed to start location logging")  
+       else:  
+          self.location_tracker.stop_logging()  
+          self.log_button.configure(text="Start Location Logging")  
+          self.status_var.set("Location logging stopped")
+
     def update_location_display(self, location):
         """Update location display with new coordinates"""
         if location:
@@ -1951,86 +1952,134 @@ class PayloadDecoder:
                     'positions': positions
                 })
         return structure
-class LocationTracker:
-    def __init__(self):
-        self.locations = []
-        self.current_location = None
-        self.log_file = None
-        
+class LocationTracker:  
+   def __init__(self):  
+      self.locations = []  
+      self.current_location = None  
+      self.log_file = None  
+      self.logging_active = False  
+      self.valid_ranges = {  
+        'x': (2000, 5500),  
+        'y': (300, 1000),  
+        'z': (500, 5000)  
+      }  
+  
+   def set_valid_ranges(self, x_range=None, y_range=None, z_range=None):  
+      """Update coordinate validation ranges"""  
+      for axis, r in zip(['x', 'y', 'z'], [x_range, y_range, z_range]):  
+        if r is not None:  
+           self.valid_ranges[axis] = (float(r[0]), float(r[1]))  
+  
+   def start_logging(self, filename="location_log.csv"):  
+      """Start logging location data to CSV"""  
+      try:  
+        if not self.logging_active:  
+           self.log_file = open(filename, 'w', newline='')  
+           self.log_file.write("Timestamp,X,Y,Z,Speed,Direction,Raw_Hex\n")  
+           self.logging_active = True  
+           return True  
+      except Exception as e:  
+        print(f"Failed to start logging: {e}")  
+        self.logging_active = False  
+        return False  
+  
+   def stop_logging(self):  
+      """Stop logging and close file"""  
+      try:  
+        if self.log_file:  
+           self.log_file.close()  
+           self.log_file = None  
+        self.logging_active = False  
+      except Exception as e:  
+        print(f"Error closing log file: {e}")  
+  
+   def analyze_packet_for_location(self, packet_data: bytes, timestamp: float) -> dict:  
+      """Extract and validate location data from packet"""  
+      try:  
+        if len(packet_data) < 32:  # Minimum required length  
+           return None  
+  
+        # Extract coordinates  
+        x = struct.unpack('<f', packet_data[0x000f:0x0013])[0]  
+        y = struct.unpack('<f', packet_data[0x0014:0x0018])[0]  
+        z = struct.unpack('<f', packet_data[0x0019:0x001d])[0]  
+  
+        # Validate coordinates  
+        if not all(self.is_valid_coordinate(val, axis)  
+               for val, axis in zip([x, y, z], ['x', 'y', 'z'])):  
+           return None  
+  
+        # Calculate movement metrics  
+        speed, direction = self.calculate_movement(x, y, z)  
+  
+        result = {  
+           'timestamp': timestamp,  
+           'x': x,  
+           'y': y,  
+           'z': z,  
+           'speed': speed,  
+           'direction': direction,  
+           'raw_hex': packet_data[0x000f:0x001d].hex()  
+        }  
+  
+        if self.logging_active:  
+           self.log_location(result)  
+  
+        self.update_location_history(result)  
+        return result  
+  
+      except Exception as e:  
+        print(f"Error analyzing packet: {e}")  
+        return None  
+  
+   def is_valid_coordinate(self, value: float, axis: str) -> bool:  
+      """Validate coordinate value"""  
+      if math.isnan(value) or math.isinf(value):  
+        return False  
+      min_val, max_val = self.valid_ranges[axis]  
+      return min_val <= value <= max_val  
+  
+   def calculate_movement(self, x: float, y: float, z: float) -> tuple:  
+      """Calculate speed and direction from coordinates"""  
+      if not self.current_location:  
+        return 0.0, 0.0  
+  
+      prev = self.current_location  
+      dx = x - prev['x']  
+      dy = y - prev['y']  
+      dz = z - prev['z']  
+  
+      speed = math.sqrt(dx*dx + dy*dy + dz*dz)  
+      direction = math.atan2(dy, dx) if speed > 0 else 0.0  
+  
+      return speed, direction  
+  
+   def update_location_history(self, location: dict):  
+      """Update location history with new data"""  
+      self.current_location = location  
+      self.locations.append(location)  
+       
+      # Keep only recent history  
+      if len(self.locations) > 1000:  
+        self.locations = self.locations[-1000:]  
+  
+   def log_location(self, location: dict):  
+      """Write location data to log file"""  
+      try:  
+        if self.log_file:  
+           timestamp = datetime.fromtimestamp(location['timestamp']).isoformat()  
+           self.log_file.write(f"{timestamp},{location['x']:.3f},{location['y']:.3f},"  
+                       f"{location['z']:.3f},{location['speed']:.3f},"  
+                       f"{location['direction']:.3f},{location['raw_hex']}\n")  
+           self.log_file.flush()  
+      except Exception as e:  
+        print(f"Error writing to log: {e}")  
+        self.stop_logging()  
+  
+   def get_location_history(self, limit=10):  
+      """Get recent location history"""  
+      return self.locations[-limit:]
 
-    def set_valid_ranges(self, x_range=None, y_range=None, z_range=None):  
-      """Update valid coordinate ranges"""  
-      if x_range is not None:  
-        self.valid_ranges['x'] = (float(x_range[0]), float(x_range[1]))  
-      if y_range is not None:  
-        self.valid_ranges['y'] = (float(y_range[0]), float(y_range[1]))  
-      if z_range is not None:  
-        self.valid_ranges['z'] = (float(z_range[0]), float(z_range[1])) 
-        
-    def start_logging(self, filename="location_log.csv"):
-        """Start logging locations to CSV file"""
-        self.log_file = open(filename, 'w')
-        self.log_file.write("Timestamp,X,Y,Z,Packet_Offset,Raw_Hex\n")
-    def stop_logging(self):
-        """Stop logging and close file"""
-        if self.log_file:
-            self.log_file.close()
-            self.log_file = None
-    def analyze_packet_for_location(self, packet_data: bytes, timestamp: float) -> dict:  
-       """Analyze packet data for location coordinates."""  
-       x_offset = 0x000f  
-       y_offset = 0x0014  
-       z_offset = 0x0019  
-  
-       # Define valid ranges based on observed good coordinates  
-       self.valid_ranges = {  
-          'x': (2000, 5500),    # Centered around ~3296  
-          'y': (300, 1000),     # Centered around ~477  
-          'z': (500, 5000)    # Centered around ~3599  
-       }  
-  
-       if len(packet_data) >= (z_offset + 4):  
-          try:  
-            x = struct.unpack('<f', packet_data[x_offset:x_offset+4])[0]  
-            y = struct.unpack('<f', packet_data[y_offset:y_offset+4])[0]  
-            z = struct.unpack('<f', packet_data[z_offset:z_offset+4])[0]  
-  
-            # Validate coordinates  
-            if (math.isnan(x) or math.isnan(y) or math.isnan(z) or  
-               math.isinf(x) or math.isinf(y) or math.isinf(z) or  
-               x < self.valid_ranges['x'][0] or x > self.valid_ranges['x'][1] or  
-               y < self.valid_ranges['y'][0] or y > self.valid_ranges['y'][1] or  
-               z < self.valid_ranges['z'][0] or z > self.valid_ranges['z'][1]):  
-               return None  
-  
-            result = {  
-               'timestamp': timestamp,  
-               'x': x,  
-               'y': y,  
-               'z': z,  
-               'raw_hex': packet_data[x_offset:z_offset+4].hex()  
-            }  
-  
-            if self.log_file:  
-               self.log_file.write(f"{datetime.datetime.fromtimestamp(timestamp).isoformat()},{x},{y},{z},{result['raw_hex']}\n")  
-               self.log_file.flush()  
-  
-            self.current_location = result  
-            self.locations.append(result)  
-            return result  
-  
-          except Exception as e:  
-            print(f"Error extracting coordinates: {e}")  
-  
-       return None
-
-
-    def get_location_history(self, limit=10):
-        """Get recent location history"""
-        return self.locations[-limit:] if self.locations else []
-    def get_current_location(self):
-        """Get most recent location"""
-        return self.current_location
 
 class AsyncProfiler:
     def __init__(self, interval=1.0):
