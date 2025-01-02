@@ -1945,45 +1945,55 @@ class LocationTracker:
         if self.log_file:
             self.log_file.close()
             self.log_file = None
-    def analyze_packet_for_location(self, packet_data: bytes, timestamp: float) -> dict:
-        """Analyze packet data for location coordinates"""
-        result = None
-        
-        # Search for the location pattern
-        for i in range(len(packet_data) - 12):  # Need at least 12 bytes for 3 float32s
-            try:
-                x = struct.unpack('<f', packet_data[i:i+4])[0]
-                y = struct.unpack('<f', packet_data[i+4:i+8])[0]
-                z = struct.unpack('<f', packet_data[i+8:i+12])[0]
-                
-                # Check if these values are within reasonable game coordinates
-                # Adjust these ranges based on your game's coordinate system
-                if (2000 < x < 3000 and  # X range
-                    0 < y < 1000 and     # Y range
-                    1500 < z < 2500):    # Z range
-                    
-                    result = {
-                        'timestamp': timestamp,
-                        'x': x,
-                        'y': y,
-                        'z': z,
-                        'offset': i,
-                        'raw_hex': packet_data[i:i+12].hex()
-                    }
-                    
-                    # Log the location if logging is enabled
-                    if self.log_file:
-                        self.log_file.write(f"{datetime.fromtimestamp(timestamp).isoformat()},{x},{y},{z},{i},{result['raw_hex']}\n")
-                        self.log_file.flush()  # Ensure it's written immediately
-                    
-                    self.current_location = result
-                    self.locations.append(result)
-                    return result
-                    
-            except Exception as e:
-                continue
-                
-        return result
+    def analyze_packet_for_location(self, packet_data: bytes, timestamp: float) -> dict:  
+       """Analyze packet data for location coordinates."""  
+       x_offset = 0x000f  
+       y_offset = 0x0014  
+       z_offset = 0x0019  
+  
+       # Define valid ranges based on observed good coordinates  
+       VALID_RANGES = {  
+          'x': (3000, 3500),    # Centered around ~3296  
+          'y': (400, 500),     # Centered around ~477  
+          'z': (3500, 3700)    # Centered around ~3599  
+       }  
+  
+       if len(packet_data) >= (z_offset + 4):  
+          try:  
+            x = struct.unpack('<f', packet_data[x_offset:x_offset+4])[0]  
+            y = struct.unpack('<f', packet_data[y_offset:y_offset+4])[0]  
+            z = struct.unpack('<f', packet_data[z_offset:z_offset+4])[0]  
+  
+            # Validate coordinates  
+            if (math.isnan(x) or math.isnan(y) or math.isnan(z) or  
+               math.isinf(x) or math.isinf(y) or math.isinf(z) or  
+               x < VALID_RANGES['x'][0] or x > VALID_RANGES['x'][1] or  
+               y < VALID_RANGES['y'][0] or y > VALID_RANGES['y'][1] or  
+               z < VALID_RANGES['z'][0] or z > VALID_RANGES['z'][1]):  
+               return None  
+  
+            result = {  
+               'timestamp': timestamp,  
+               'x': x,  
+               'y': y,  
+               'z': z,  
+               'raw_hex': packet_data[x_offset:z_offset+4].hex()  
+            }  
+  
+            if self.log_file:  
+               self.log_file.write(f"{datetime.datetime.fromtimestamp(timestamp).isoformat()},{x},{y},{z},{result['raw_hex']}\n")  
+               self.log_file.flush()  
+  
+            self.current_location = result  
+            self.locations.append(result)  
+            return result  
+  
+          except Exception as e:  
+            print(f"Error extracting coordinates: {e}")  
+  
+       return None
+
+
     def get_location_history(self, limit=10):
         """Get recent location history"""
         return self.locations[-limit:] if self.locations else []
