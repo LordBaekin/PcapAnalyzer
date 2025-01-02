@@ -1227,6 +1227,45 @@ class PacketAnalyzerGUI:
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("Error", f"Failed to load PCAP: {str(e)}"))
             self.root.after(0, lambda: self.status_var.set("Error loading PCAP"))
+    def update_packet_list(self):
+        """Update the packet list display with current packets"""
+        try:
+            # Clear existing items
+            self.packet_tree.delete(*self.packet_tree.get_children())
+        
+            # Add packets to the tree
+            for i, packet in enumerate(self.packets, 1):
+                try:
+                    decoded = self.packet_decoder.decode_packet(packet)
+                
+                    time = decoded['timestamp']['formatted']
+                    src = decoded.get('layer3', {}).get('src_ip', 'Unknown')
+                    dst = decoded.get('layer3', {}).get('dst_ip', 'Unknown')
+                
+                    # Get the highest layer protocol
+                    if decoded.get('layer7', {}).get('protocol'):
+                        proto = decoded['layer7']['protocol']
+                    elif decoded.get('layer4', {}).get('type'):
+                        proto = decoded['layer4']['type']
+                    else:
+                        proto = decoded.get('layer3', {}).get('type', 'Unknown')
+                    
+                    length = decoded['raw_data']['length']
+                
+                    self.packet_tree.insert('', 'end', values=(i, time, src, dst, proto, length))
+                
+                except Exception as e:
+                    print(f"Error processing packet {i}: {e}")
+                    # Insert a simplified entry for packets that fail to decode
+                    self.packet_tree.insert('', 'end', values=(i, "Error", "Error", "Error", "Unknown", "Error"))
+        
+            # Update status
+            self.status_var.set(f"Showing {len(self.packets)} packets")
+        
+        except Exception as e:
+            print(f"Error updating packet list: {e}")
+            self.status_var.set("Error updating packet list")
+
     def update_packet_list_with_decoded(self, decoded_packets):
         """Update packet list with pre-decoded packet information"""
         self.packet_tree.delete(*self.packet_tree.get_children())
