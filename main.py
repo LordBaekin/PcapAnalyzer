@@ -687,30 +687,76 @@ class CoordinateAnalyzer:
             abs(z) < 1e6
         ])
 class PacketAnalyzerGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Advanced Network Packet Analyzer")
-        self.root.geometry("1200x800")
-        # Initialize analyzers
-        self.detector = EncodingDetector()
-        self.packet_decoder = PacketDecoder()
-        self.coordinate_analyzer = CoordinateAnalyzer()
-        self.payload_decoder = PayloadDecoder()
-        
-        # Initialize packet storage
-        self.packets = []
-        self.original_packets = []
-        self.current_packet_index = 0
-        
-        # Initialize live scanner
-        self.scanner = LivePacketScanner(self.process_live_packet)
-        self.is_scanning = False
-        # Create GUI components
-        self.create_gui()
-        self.add_protocol_filters()
-        self.add_export_options()
-        self.setup_live_capture_controls()
-        self.setup_protocol_analysis_frame()
+    def __init__(self, root):  
+      self.root = root  
+      self.root.title("Advanced Network Packet Analyzer")  
+      self.root.geometry("1200x800")  
+      # Initialize analyzers  
+      self.detector = EncodingDetector()  
+      self.packet_decoder = PacketDecoder()  
+      self.coordinate_analyzer = CoordinateAnalyzer()  
+      self.payload_decoder = PayloadDecoder()  
+      self.location_tracker = LocationTracker()  # Add location tracker  
+       
+      # Initialize packet storage  
+      self.packets = []  
+      self.original_packets = []  
+      self.current_packet_index = 0  
+       
+      # Initialize live scanner  
+      self.scanner = LivePacketScanner(self.process_live_packet)  
+      self.is_scanning = False  
+      # Create GUI components  
+      self.create_gui()  
+      self.add_protocol_filters()  
+      self.add_export_options()  
+      self.setup_live_capture_controls()  
+      self.setup_protocol_analysis_frame()  
+      self.setup_location_tracking_frame()  # Add location tracking frame  
+      self.create_range_controls()  # Call create_range_controls method
+
+    def create_range_controls(self):  
+       # Create range control frame  
+       range_frame = ttk.LabelFrame(self.root, text="Coordinate Ranges")  
+       range_frame.pack(fill="x", padx=5, pady=5)  
+  
+       # Create entry variables  
+       self.x_min_var = tk.StringVar(value="3000")  
+       self.x_max_var = tk.StringVar(value="3500")  
+       self.y_min_var = tk.StringVar(value="400")  
+       self.y_max_var = tk.StringVar(value="500")  
+       self.z_min_var = tk.StringVar(value="3500")  
+       self.z_max_var = tk.StringVar(value="3700")  
+  
+       # Create range input fields  
+       ranges = [("X Range:", self.x_min_var, self.x_max_var),  
+             ("Y Range:", self.y_min_var, self.y_max_var),  
+             ("Z Range:", self.z_min_var, self.z_max_var)]  
+  
+       for i, (label, min_var, max_var) in enumerate(ranges):  
+          frame = ttk.Frame(range_frame)  
+          frame.pack(fill="x", padx=5, pady=2)  
+          ttk.Label(frame, text=label).pack(side="left")  
+          ttk.Entry(frame, textvariable=min_var, width=8).pack(side="left", padx=2)  
+          ttk.Label(frame, text="to").pack(side="left", padx=2)  
+          ttk.Entry(frame, textvariable=max_var, width=8).pack(side="left", padx=2)  
+  
+       # Add update button  
+       ttk.Button(range_frame, text="Update Ranges",  
+              command=self.update_ranges).pack(pady=5)  
+  
+    def update_ranges(self):  
+       """Update coordinate ranges in LocationTracker"""  
+       try:  
+          self.location_tracker.set_valid_ranges(  
+            x_range=(float(self.x_min_var.get()), float(self.x_max_var.get())),  
+            y_range=(float(self.y_min_var.get()), float(self.y_max_var.get())),  
+            z_range=(float(self.z_min_var.get()), float(self.z_max_var.get()))  
+          )  
+          self.status_var.set("Coordinate ranges updated successfully")  
+       except ValueError:  
+          self.status_var.set("Error: Please enter valid numbers for ranges")
+
     def setup_live_capture_controls(self):
         """Add live capture controls to the GUI"""
         capture_frame = ttk.LabelFrame(self.root, text="Live Capture")
@@ -1069,32 +1115,7 @@ class PacketAnalyzerGUI:
         # Update packet count
         count = len(self.packets)
         self.root.after(0, self.packet_count_var.set, f"Packets: {count}")
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Advanced Network Packet Analyzer")
-        self.root.geometry("1200x800")
-        # Initialize analyzers
-        self.detector = EncodingDetector()
-        self.packet_decoder = PacketDecoder()
-        self.coordinate_analyzer = CoordinateAnalyzer()
-        self.payload_decoder = PayloadDecoder()
-        self.location_tracker = LocationTracker()  # Add location tracker
-        
-        # Initialize packet storage
-        self.packets = []
-        self.original_packets = []
-        self.current_packet_index = 0
-        
-        # Initialize live scanner
-        self.scanner = LivePacketScanner(self.process_live_packet)
-        self.is_scanning = False
-        # Create GUI components
-        self.create_gui()
-        self.add_protocol_filters()
-        self.add_export_options()
-        self.setup_live_capture_controls()
-        self.setup_protocol_analysis_frame()
-        self.setup_location_tracking_frame()  # Add location tracking frame
+    
     def add_packet_to_list(self, packet, decoded_packet=None):
         """Add a single packet to the packet list"""
         try:
@@ -1936,6 +1957,16 @@ class LocationTracker:
         self.current_location = None
         self.log_file = None
         
+
+    def set_valid_ranges(self, x_range=None, y_range=None, z_range=None):  
+      """Update valid coordinate ranges"""  
+      if x_range is not None:  
+        self.valid_ranges['x'] = (float(x_range[0]), float(x_range[1]))  
+      if y_range is not None:  
+        self.valid_ranges['y'] = (float(y_range[0]), float(y_range[1]))  
+      if z_range is not None:  
+        self.valid_ranges['z'] = (float(z_range[0]), float(z_range[1])) 
+        
     def start_logging(self, filename="location_log.csv"):
         """Start logging locations to CSV file"""
         self.log_file = open(filename, 'w')
@@ -1952,10 +1983,10 @@ class LocationTracker:
        z_offset = 0x0019  
   
        # Define valid ranges based on observed good coordinates  
-       VALID_RANGES = {  
-          'x': (3000, 3500),    # Centered around ~3296  
-          'y': (400, 500),     # Centered around ~477  
-          'z': (3500, 3700)    # Centered around ~3599  
+       self.valid_ranges = {  
+          'x': (2000, 5500),    # Centered around ~3296  
+          'y': (300, 1000),     # Centered around ~477  
+          'z': (500, 5000)    # Centered around ~3599  
        }  
   
        if len(packet_data) >= (z_offset + 4):  
@@ -1967,9 +1998,9 @@ class LocationTracker:
             # Validate coordinates  
             if (math.isnan(x) or math.isnan(y) or math.isnan(z) or  
                math.isinf(x) or math.isinf(y) or math.isinf(z) or  
-               x < VALID_RANGES['x'][0] or x > VALID_RANGES['x'][1] or  
-               y < VALID_RANGES['y'][0] or y > VALID_RANGES['y'][1] or  
-               z < VALID_RANGES['z'][0] or z > VALID_RANGES['z'][1]):  
+               x < self.valid_ranges['x'][0] or x > self.valid_ranges['x'][1] or  
+               y < self.valid_ranges['y'][0] or y > self.valid_ranges['y'][1] or  
+               z < self.valid_ranges['z'][0] or z > self.valid_ranges['z'][1]):  
                return None  
   
             result = {  
