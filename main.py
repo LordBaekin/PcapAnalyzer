@@ -863,6 +863,33 @@ class PacketAnalyzerGUI:
         self.details_text = scrolledtext.ScrolledText(details_frame, height=10)
         self.details_text.pack(fill='both', expand=True, padx=5, pady=5)
         self.right_notebook.add(details_frame, text='Packet Details')
+
+        # Search Bar Frame  
+        search_frame = ttk.Frame(toolbar)  
+        search_frame.pack(side='left', padx=5)  
+  
+        self.search_var = tk.StringVar()  
+        self.search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=30)  
+        self.search_entry.pack(side='left')  
+  
+        self.case_sensitive = tk.BooleanVar(value=False)  
+        self.regex = tk.BooleanVar(value=False)  
+        self.hex_search = tk.BooleanVar(value=False)  
+  
+        ttk.Checkbutton(search_frame, text="Case Sensitive", variable=self.case_sensitive).pack(side='left')  
+        ttk.Checkbutton(search_frame, text="Regex", variable=self.regex).pack(side='left')  
+        ttk.Checkbutton(search_frame, text="Hex", variable=self.hex_search).pack(side='left')  
+  
+  
+        self.find_button = ttk.Button(search_frame, text="Find", command=self.find_text)  
+        self.find_button.pack(side='left', padx=2)  
+        self.find_next_button = ttk.Button(search_frame, text="Find Next", command=self.find_next_text)  
+        self.find_next_button.pack(side='left', padx=2)  
+  
+  
+        self.match_count_label = ttk.Label(search_frame, text="Matches: 0")  
+        self.match_count_label.pack(side='left')
+
         # Payload tab
         payload_frame = ttk.Frame(self.right_notebook)
         self.payload_text = scrolledtext.ScrolledText(payload_frame, height=10)
@@ -877,6 +904,106 @@ class PacketAnalyzerGUI:
         self.filter_var = tk.StringVar()
         # Bind events
         self.packet_tree.bind('<<TreeviewSelect>>', self.on_packet_select)
+
+        self.root.bind("<Control-f>", lambda event: self.search_entry.focus_set())  
+        self.root.bind("<F3>", self.find_next_text)  
+  
+  
+        self.search_results = []  # Store search result indices  
+        self.current_match_index = -1  
+
+    def find_text(self):  
+       """Initial search for text"""  
+       search_text = self.search_var.get()  
+       if not search_text:  
+          return  
+  
+       # Clear previous search results and reset index  
+       self.search_results = []  
+       self.current_match_index = -1  
+    
+       # Get the text content  
+       content = self.payload_text.get("1.0", tk.END)  
+    
+       if self.hex_search.get():  
+          try:  
+            # Convert search text to bytes for hex search  
+            search_bytes = bytes.fromhex(search_text.replace(' ', ''))  
+            content_bytes = bytes.fromhex(content.replace(' ', '').replace('\n', ''))  
+          
+            # Find all occurrences  
+            pos = -1  
+            while True:  
+               pos = content_bytes.find(search_bytes, pos + 1)  
+               if pos == -1:  
+                  break  
+               # Convert byte position to text position (each byte = 2 chars + space)  
+               text_pos = pos * 3  
+               self.search_results.append(f"1.{text_pos}")  
+            
+          except ValueError:  
+            messagebox.showerror("Error", "Invalid hex string")  
+            return  
+       else:  
+          # Text search  
+          flags = 0 if self.case_sensitive.get() else re.IGNORECASE  
+          if self.regex.get():  
+            try:  
+               pattern = re.compile(search_text, flags)  
+               for match in pattern.finditer(content):  
+                  start_pos = f"1.{match.start()}"  
+                  self.search_results.append(start_pos)  
+            except re.error:  
+               messagebox.showerror("Error", "Invalid regular expression")  
+               return  
+          else:  
+            # Plain text search  
+            pos = "1.0"  
+            while True:  
+               pos = self.payload_text.search(search_text, pos, tk.END,  
+                                  nocase=not self.case_sensitive.get())  
+               if not pos:  
+                  break  
+               self.search_results.append(pos)  
+               pos = f"{pos}+1c"  
+  
+       # Update match count and highlight first match  
+       self.match_count_label.config(text=f"Matches: {len(self.search_results)}")  
+       if self.search_results:  
+          self.find_next_text()  
+       else:  
+          messagebox.showinfo("Search", "No matches found")  
+  
+    def find_next_text(self, *args):  
+       """Find next occurrence of search text"""  
+       if not self.search_results:  
+          self.find_text()  
+          return  
+       
+       # Remove previous highlight  
+       self.payload_text.tag_remove("search", "1.0", tk.END)  
+    
+       # Move to next match  
+       self.current_match_index = (self.current_match_index + 1) % len(self.search_results)  
+       match_pos = self.search_results[self.current_match_index]  
+    
+       # Calculate end position for highlighting  
+       search_text = self.search_var.get()  
+       if self.hex_search.get():  
+          # For hex search, highlight 2 chars per byte plus spaces  
+          length = len(bytes.fromhex(search_text.replace(' ', ''))) * 3  
+       else:  
+          length = len(search_text)  
+    
+       # Highlight current match  
+       end_pos = f"{match_pos}+{length}c"  
+       self.payload_text.tag_add("search", match_pos, end_pos)  
+       self.payload_text.tag_config("search", background="yellow")  
+    
+       # Ensure the match is visible  
+       self.payload_text.see(match_pos)
+
+
     def add_protocol_filters(self):
         """Add quick filter buttons for common protocols"""
         filter_frame = ttk.LabelFrame(self.root, text="Quick Filters")
